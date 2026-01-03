@@ -16,6 +16,11 @@ out/
 .env.test.local
 .env.production.local
 
+# Firebase Service Account Keys (NEVER commit these!)
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
+firebase-adminsdk*.json
+
 # IDE
 .vscode/
 .idea/
