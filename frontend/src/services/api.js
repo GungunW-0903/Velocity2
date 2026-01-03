@@ -6,7 +6,7 @@ const API_BASE = '/api'
 async function getAuthHeaders() {
   const user = auth.currentUser
   if (!user) throw new Error('Not authenticated')
-  
+
   const token = await user.getIdToken()
   return {
     'Authorization': `Bearer ${token}`,
@@ -52,11 +52,11 @@ export const uploadApi = {
   async uploadPdf(file) {
     const user = auth.currentUser
     if (!user) throw new Error('Not authenticated')
-    
+
     const token = await user.getIdToken()
     const formData = new FormData()
     formData.append('resume', file)
-    
+
     const response = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
       headers: {
@@ -71,11 +71,11 @@ export const uploadApi = {
   async extractText(file) {
     const user = auth.currentUser
     if (!user) throw new Error('Not authenticated')
-    
+
     const token = await user.getIdToken()
     const formData = new FormData()
     formData.append('resume', file)
-    
+
     const response = await fetch(`${API_BASE}/upload/extract-text`, {
       method: 'POST',
       headers: {
@@ -177,3 +177,158 @@ export const enhanceApi = {
     return handleResponse(response)
   }
 }
+
+// ============ JOBS API ============
+export const jobsApi = {
+  // Search jobs with query
+  async search(query, filters = {}) {
+    const headers = await getAuthHeaders()
+    const params = new URLSearchParams({ query, ...filters })
+    const response = await fetch(`${API_BASE}/fetchjobs?${params}`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  }
+}
+
+// ============ JOB TRACKER API ============
+export const jobTrackerApi = {
+  // Get all tracked jobs
+  async getAll() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-tracker`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Track a new job application
+  async track(jobData) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-tracker`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(jobData)
+    })
+    return handleResponse(response)
+  },
+
+  // Update job application status
+  async updateStatus(jobId, status, notes = '') {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-tracker/${jobId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ status, notes })
+    })
+    return handleResponse(response)
+  },
+
+  // Delete tracked job
+  async delete(jobId) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-tracker/${jobId}`, {
+      method: 'DELETE',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Get job tracker stats
+  async getStats() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-tracker/stats`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  }
+}
+
+// ============ JOB ALERTS API ============
+export const jobAlertsApi = {
+  // Get all job alerts (1-indexed)
+  async getAll() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Get single alert with notification history
+  async getById(alertId) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/${alertId}`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Create new job alert
+  async create(alertData) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(alertData)
+    })
+    return handleResponse(response)
+  },
+
+  // Update job alert
+  async update(alertId, alertData) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/${alertId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(alertData)
+    })
+    return handleResponse(response)
+  },
+
+  // Delete job alert
+  async delete(alertId) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/${alertId}`, {
+      method: 'DELETE',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Toggle alert active status
+  async toggle(alertId) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/${alertId}/toggle`, {
+      method: 'POST',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Trigger test fetch for an alert
+  async test(alertId) {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/${alertId}/test`, {
+      method: 'POST',
+      headers
+    })
+    return handleResponse(response)
+  },
+
+  // Get alerts summary stats
+  async getStats() {
+    const headers = await getAuthHeaders()
+    const response = await fetch(`${API_BASE}/job-alerts/stats/summary`, {
+      method: 'GET',
+      headers
+    })
+    return handleResponse(response)
+  }
+}
+

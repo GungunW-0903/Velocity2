@@ -26,7 +26,7 @@ export const sendJobApplicationEmail = async ({
 }) => {
   try {
     let resumeAttachment;
-    
+
     if (resumeUrl) {
       const response = await axios.get(resumeUrl, { responseType: 'arraybuffer' });
       resumeAttachment = {
@@ -138,5 +138,126 @@ export const sendMatchingJobMail = async ({
   } catch (error) {
     console.error('Error sending job matching email:', error);
     throw new Error(`Failed to send job matching email: ${error.message}`);
+  }
+};
+
+/**
+ * Send job alert email with multiple jobs
+ * @param {Object} params
+ * @param {string} params.userEmail - Recipient email
+ * @param {string} params.userName - Recipient name
+ * @param {string} params.alertTitle - Alert name/title
+ * @param {Array} params.jobs - Array of job objects to include
+ */
+export const sendJobAlertEmail = async ({
+  userEmail,
+  userName = 'Job Seeker',
+  alertTitle,
+  jobs = []
+}) => {
+  try {
+    if (!jobs.length) {
+      throw new Error('No jobs to send');
+    }
+
+    // Format salary display
+    const formatSalary = (salary) => {
+      if (!salary || (!salary.min && !salary.max)) return 'Not specified';
+      const currency = salary.currency || 'USD';
+      const period = salary.period || 'yearly';
+      if (salary.min && salary.max) {
+        return `${currency} ${salary.min.toLocaleString()} - ${salary.max.toLocaleString()} / ${period}`;
+      }
+      return `${currency} ${(salary.min || salary.max).toLocaleString()} / ${period}`;
+    };
+
+    // Generate job cards HTML (1-indexed as per user requirement)
+    const jobCardsHtml = jobs.map((job, index) => `
+      <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 4px solid #667eea;">
+        <div style="display: flex; align-items: flex-start; gap: 16px;">
+          ${job.companyLogo ? `
+            <img src="${job.companyLogo}" alt="${job.company}" style="width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: #f5f5f5;">
+          ` : `
+            <div style="width: 56px; height: 56px; border-radius: 8px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px;">
+              ${job.company.charAt(0).toUpperCase()}
+            </div>
+          `}
+          <div style="flex: 1;">
+            <div style="color: #888; font-size: 12px; margin-bottom: 4px;">Job #${index + 1}</div>
+            <h3 style="margin: 0 0 8px 0; color: #1a1a2e; font-size: 18px;">${job.title}</h3>
+            <p style="margin: 0 0 12px 0; color: #667eea; font-weight: 500;">${job.company}</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 13px; color: #666;">
+              <span>📍 ${job.location || 'Remote'}</span>
+              <span>💼 ${job.employmentType || 'Full-time'}</span>
+              <span>💰 ${formatSalary(job.salary)}</span>
+              ${job.isRemote ? '<span style="background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 4px; font-size: 11px;">🌐 Remote</span>' : ''}
+            </div>
+            <p style="margin: 0 0 16px 0; color: #555; font-size: 14px; line-height: 1.5;">
+              ${job.descriptionSnippet || job.description?.substring(0, 200) + '...' || 'No description available.'}
+            </p>
+            <a href="${job.applyLink}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 500; font-size: 14px;">
+              Apply Now →
+            </a>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: userEmail,
+      subject: `🚀 ${jobs.length} New Job${jobs.length > 1 ? 's' : ''} Matching "${alertTitle}"`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5;">
+          <div style="max-width: 650px; margin: 0 auto; padding: 20px;">
+            <!-- Header -->
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 16px 16px 0 0;">
+              <h1 style="margin: 0 0 8px 0; font-size: 28px;">🎯 New Job Matches</h1>
+              <p style="margin: 0; opacity: 0.9; font-size: 16px;">We found ${jobs.length} job${jobs.length > 1 ? 's' : ''} matching your alert</p>
+            </div>
+
+            <!-- Alert Info -->
+            <div style="background: #ffffff; padding: 24px 30px; border-bottom: 1px solid #eee;">
+              <p style="margin: 0; color: #333;">
+                Hi <strong>${userName}</strong> 👋
+              </p>
+              <p style="margin: 12px 0 0 0; color: #666;">
+                Great news! We found new job opportunities matching your alert: <strong>"${alertTitle}"</strong>
+              </p>
+            </div>
+
+            <!-- Job Cards -->
+            <div style="background: #f8f9fa; padding: 24px;">
+              ${jobCardsHtml}
+            </div>
+
+            <!-- Footer -->
+            <div style="background: #1a1a2e; color: #aaa; padding: 30px; text-align: center; border-radius: 0 0 16px 16px;">
+              <p style="margin: 0 0 12px 0; font-size: 14px;">
+                This email was sent by <strong style="color: #667eea;">Velocity</strong>
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #777;">
+                You're receiving this because you have job alerts enabled.<br>
+                Manage your alerts in your Velocity dashboard.
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Job alert email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending job alert email:', error);
+    throw new Error(`Failed to send job alert email: ${error.message}`);
   }
 };
