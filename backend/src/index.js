@@ -64,10 +64,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
-  res.status(200).json({
-    status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
     environment: process.env.NODE_ENV
   });
 });
