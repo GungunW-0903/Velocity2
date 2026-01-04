@@ -20,6 +20,34 @@ let consecutiveFailures = 0;
 const MAX_CONSECUTIVE_FAILURES = 5;
 
 /**
+ * Map our employment types to RapidAPI format
+ * Our model uses: 'full-time', 'part-time', 'contract', 'internship'
+ * RapidAPI expects: 'FULLTIME', 'CONTRACTOR', 'PARTTIME', 'INTERN'
+ */
+const mapEmploymentType = (types) => {
+    if (!types || !Array.isArray(types) || types.length === 0) {
+        return ''; // Don't send employment_types if empty
+    }
+    
+    const typeMap = {
+        'full-time': 'FULLTIME',
+        'fulltime': 'FULLTIME',
+        'part-time': 'PARTTIME',
+        'parttime': 'PARTTIME',
+        'contract': 'CONTRACTOR',
+        'contractor': 'CONTRACTOR',
+        'internship': 'INTERN',
+        'intern': 'INTERN'
+    };
+    
+    const mappedTypes = types
+        .map(t => typeMap[t?.toLowerCase()] || null)
+        .filter(Boolean);
+    
+    return mappedTypes.join(',');
+};
+
+/**
  * Process a single job alert - fetch jobs and send notifications
  */
 export const processAlert = async (alertData) => {
@@ -30,13 +58,17 @@ export const processAlert = async (alertData) => {
     try {
         // Build search query from alert preferences
         const searchQuery = [title, ...(keywords || [])].filter(Boolean).join(' ');
+        
+        // Map employment types to RapidAPI format
+        const mappedEmploymentType = mapEmploymentType(employmentType);
+        console.log(`📋 Employment type: ${employmentType} -> ${mappedEmploymentType || '(none)'}`);
 
         // Fetch jobs from RapidAPI
         const fetchedJobs = await searchJobs({
             query: searchQuery,
             location: location || '',
             remoteOnly: remoteOnly || false,
-            employmentType: employmentType?.[0] || '',
+            employmentType: mappedEmploymentType,
             page: 1,
             numPages: 1
         });
@@ -79,12 +111,18 @@ export const processAlert = async (alertData) => {
         // Send email if there are new jobs
         if (newJobs.length > 0) {
             try {
+                console.log(`📬 Sending email to: ${userEmail} (${userName})`);
+                console.log(`   Alert: "${title}", Jobs count: ${newJobs.length}`);
+                
                 const emailResult = await sendJobAlertEmail({
                     userEmail,
                     userName: userName || 'Job Seeker',
                     alertTitle: title,
                     jobs: newJobs
                 });
+                
+                console.log(`✅ Email sent successfully! Message ID: ${emailResult.messageId}`);
+                console.log(`   Recipient: ${userEmail}`);
 
                 // Log all notifications
                 const notificationPromises = newJobs.map(job =>
@@ -204,6 +242,27 @@ export const startWorker = () => {
  * Scheduled task to enqueue all active alerts
  */
 export const scheduleAlertChecks = () => {
+    // Check if we should use 10-second interval for testing
+    const testingMode = process.env.ALERT_TEST_INTERVAL === '10s';
+    
+    if (testingMode) {
+        console.log('🧪 TESTING MODE: Running job alerts every 10 seconds');
+        
+        // Use setInterval for 10-second testing
+        setInterval(async () => {
+            console.log('\n⏰ Scheduled job alert check starting...');
+            await runAlertCheck();
+        }, 10000);
+        
+        // Also run immediately
+        setTimeout(async () => {
+            console.log('\n⏰ Running initial job alert check...');
+            await runAlertCheck();
+        }, 2000);
+        
+        return;
+    }
+    
     // Run every 6 hours: 0 */6 * * *
     // For testing, you can use '*/5 * * * *' (every 5 minutes)
     const schedule = process.env.ALERT_CRON_SCHEDULE || '0 */6 * * *';
@@ -260,6 +319,58 @@ export const scheduleAlertChecks = () => {
     });
 
     console.log(`📅 Alert check scheduled: ${schedule}`);
+};
+
+/**
+ * Core alert check logic - extracted for reuse
+ */
+const runAlertCheck = async () => {
+    try {
+        // Get all active alerts
+        const activeAlerts = await JobAlert.find({ isActive: true })
+            .select('_id userId userEmail userName title keywords location remoteOnly employmentType frequency')
+            .lean();
+
+        if (!activeAlerts.length) {
+            console.log('📭 No active alerts to process');
+            return;
+        }
+
+        console.log(`📋 Found ${activeAlerts.length} active alerts`);
+
+        // Prepare alert data for queue
+        const alertsToQueue = activeAlerts.map(alert => ({
+            alertId: alert._id.toString(),
+            userId: alert.userId,
+            userEmail: alert.userEmail,
+            userName: alert.userName,
+            title: alert.title,
+            keywords: alert.keywords || [],
+            location: alert.location,
+            remoteOnly: alert.remoteOnly,
+            employmentType: alert.employmentType
+        }));
+
+        // If queue available, add to queue, otherwise process directly
+        if (isQueueAvailable()) {
+            await addBatchAlertsToQueue(alertsToQueue);
+            console.log(`📥 Added ${alertsToQueue.length} alerts to queue`);
+        } else {
+            console.log('⚠️  Queue not available, processing alerts directly...');
+            for (const alertData of alertsToQueue) {
+                try {
+                    await processAlert(alertData);
+                    // Add delay between requests to respect rate limits
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_CONFIG.delayBetweenJobs));
+                } catch (err) {
+                    console.error(`Failed to process alert ${alertData.alertId}:`, err.message);
+                }
+            }
+        }
+
+    } catch (error) {
+        console.error('❌ Error in alert check:', error);
+    }
 };
 
 /**
