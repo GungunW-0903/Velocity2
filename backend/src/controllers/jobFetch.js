@@ -7,13 +7,16 @@ export const getJobs = async (req, res) => {
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
-    const query = req.query.query;
+    const { query, jobType, experienceLevel, location } = req.query;
     if (!query) {
       return res.status(400).json({ message: "Query parameter is required" });
     }
 
     const querystring = {
       query: query.trim(),
+      ...(jobType && { job_type: jobType }),
+      ...(experienceLevel && { experience_level: experienceLevel }),
+      ...(location && { location: location.trim() || undefined }),
     };
     
     const jobsData = await fetchJobs(querystring);
