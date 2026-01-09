@@ -1,6 +1,6 @@
 import { auth } from '../config/firebase'
 
-const API_BASE = '/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // Helper to get auth headers
 async function getAuthHeaders() {
